@@ -92,7 +92,7 @@ export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
     if (!SpeechRecognitionAPI) {
       setError('Spraakherkenning wordt niet ondersteund. Gebruik Chrome of Safari.')
       setStatus('error')
-      setTimeout(() => { setStatus('idle'); setError('') }, 5000)
+      setTimeout(() => { setStatus('idle'); setError('') }, 2000)
       return
     }
 
@@ -133,7 +133,7 @@ export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
 
       // Reset silence timer
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
-      silenceTimerRef.current = setTimeout(() => triggerFinal(), 5000)
+      silenceTimerRef.current = setTimeout(() => triggerFinal(), 2000)
     }
 
     recognition.onerror = (event: { error: string }) => {
@@ -152,7 +152,7 @@ export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
 
     // Start silence timer
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
-    silenceTimerRef.current = setTimeout(() => triggerFinal(), 5000)
+    silenceTimerRef.current = setTimeout(() => triggerFinal(), 2000)
   }, [triggerFinal])
 
   const sendToApi = useCallback(async (transcript: string) => {
