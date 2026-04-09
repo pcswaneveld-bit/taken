@@ -14,6 +14,8 @@ type AnyRecognition = any
 export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
   const [status, setStatus] = useState<Status>('idle')
   const [liveText, setLiveText] = useState('')
+  const [interimText, setInterimText] = useState('')
+  // liveText = afgeronde zinnen, interimText = wat de gebruiker nu zegt
   const [error, setError] = useState('')
 
   const recognitionRef = useRef<AnyRecognition>(null)
@@ -60,6 +62,7 @@ export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
 
       setStatus('done')
       setLiveText('')
+      setInterimText('')
       transcriptRef.current = ''
       onTaskCreated()
 
@@ -74,6 +77,7 @@ export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
   const startRecording = useCallback(() => {
     setError('')
     setLiveText('')
+    setInterimText('')
     transcriptRef.current = ''
 
     const w = window as unknown as Record<string, unknown>
@@ -114,7 +118,8 @@ export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
       if (final) {
         transcriptRef.current += final + ' '
       }
-      setLiveText(transcriptRef.current + interim)
+      setLiveText(transcriptRef.current)
+      setInterimText(interim)
       resetSilenceTimer()
     }
 
@@ -171,9 +176,10 @@ export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
         {status === 'error' && <span className="text-red-500">{error}</span>}
       </div>
 
-      {liveText && (
+      {(liveText || interimText) && (
         <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 min-h-12">
           {liveText}
+          {interimText && <span className="text-zinc-400">{interimText}</span>}
         </div>
       )}
     </div>
