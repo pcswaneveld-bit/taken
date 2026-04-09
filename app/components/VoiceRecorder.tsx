@@ -8,12 +8,15 @@ interface VoiceRecorderProps {
 
 type Status = 'idle' | 'recording' | 'processing' | 'done' | 'error'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyRecognition = any
+
 export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
   const [status, setStatus] = useState<Status>('idle')
   const [liveText, setLiveText] = useState('')
   const [error, setError] = useState('')
 
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const recognitionRef = useRef<AnyRecognition>(null)
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const transcriptRef = useRef('')
 
@@ -73,17 +76,19 @@ export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
     setLiveText('')
     transcriptRef.current = ''
 
-    const SpeechRecognition =
-      window.SpeechRecognition || (window as unknown as { webkitSpeechRecognition: typeof window.SpeechRecognition }).webkitSpeechRecognition
+    const w = window as unknown as Record<string, unknown>
+    const SpeechRecognitionAPI =
+      (w['SpeechRecognition'] as new () => AnyRecognition) ||
+      (w['webkitSpeechRecognition'] as new () => AnyRecognition)
 
-    if (!SpeechRecognition) {
+    if (!SpeechRecognitionAPI) {
       setError('Spraakherkenning wordt niet ondersteund in deze browser. Gebruik Chrome of Safari.')
       setStatus('error')
       setTimeout(() => { setStatus('idle'); setError('') }, 5000)
       return
     }
 
-    const recognition = new SpeechRecognition()
+    const recognition = new SpeechRecognitionAPI()
     recognition.lang = 'nl-NL'
     recognition.continuous = true
     recognition.interimResults = true
@@ -93,7 +98,7 @@ export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
       resetSilenceTimer()
     }
 
-    recognition.onresult = (event) => {
+    recognition.onresult = (event: { resultIndex: number; results: { isFinal: boolean; [n: number]: { transcript: string } }[] }) => {
       let interim = ''
       let final = ''
 
@@ -113,7 +118,7 @@ export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
       resetSilenceTimer()
     }
 
-    recognition.onerror = (event) => {
+    recognition.onerror = (event: { error: string }) => {
       if (event.error === 'no-speech') return
       setError(`Fout: ${event.error}`)
       setStatus('error')
