@@ -21,6 +21,8 @@ type TaskPreview = {
   notes: string | null
 }
 
+const STOP_WORDS = ['stop', 'stoppen', 'klaar', 'genoeg']
+
 function speak(text: string): Promise<void> {
   return new Promise((resolve) => {
     window.speechSynthesis.cancel()
@@ -31,6 +33,19 @@ function speak(text: string): Promise<void> {
     utterance.onerror = () => resolve()
     window.speechSynthesis.speak(utterance)
   })
+}
+
+function containsStopWord(text: string): boolean {
+  const words = text.trim().toLowerCase().split(/\s+/)
+  return words.some((w) => STOP_WORDS.includes(w))
+}
+
+function removeStopWord(text: string): string {
+  return text
+    .trim()
+    .split(/\s+/)
+    .filter((w) => !STOP_WORDS.includes(w.toLowerCase()))
+    .join(' ')
 }
 
 export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
@@ -45,11 +60,7 @@ export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const transcriptRef = useRef('')
   const conversationRef = useRef<ConversationMessage[]>([])
-
-  const resetSilenceTimer = useCallback((onSilence: () => void) => {
-    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
-    silenceTimerRef.current = setTimeout(onSilence, 5000)
-  }, [])
+  const onFinalRef = useRef<((t: string) => void) | null>(null)
 
   const stopRecognition = useCallback(() => {
     if (recognitionRef.current) {
@@ -61,6 +72,16 @@ export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
       silenceTimerRef.current = null
     }
   }, [])
+
+  const triggerFinal = useCallback(() => {
+    stopRecognition()
+    const transcript = removeStopWord(transcriptRef.current).trim()
+    if (transcript && onFinalRef.current) {
+      onFinalRef.current(transcript)
+    } else {
+      setStatus('idle')
+    }
+  }, [stopRecognition])
 
   const startRecognition = useCallback((onFinal: (transcript: string) => void) => {
     const w = window as unknown as Record<string, unknown>
@@ -76,6 +97,7 @@ export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
     }
 
     transcriptRef.current = ''
+    onFinalRef.current = onFinal
     setLiveText('')
     setInterimText('')
 
@@ -95,13 +117,23 @@ export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
           interim += result[0].transcript
         }
       }
-      if (final) transcriptRef.current += final + ' '
+
+      if (final) {
+        transcriptRef.current += final + ' '
+
+        // Stop word detected in final transcript
+        if (containsStopWord(final)) {
+          triggerFinal()
+          return
+        }
+      }
+
       setLiveText(transcriptRef.current)
       setInterimText(interim)
-      resetSilenceTimer(() => {
-        stopRecognition()
-        onFinal(transcriptRef.current.trim())
-      })
+
+      // Reset silence timer
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = setTimeout(() => triggerFinal(), 5000)
     }
 
     recognition.onerror = (event: { error: string }) => {
@@ -117,7 +149,11 @@ export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
 
     recognitionRef.current = recognition
     recognition.start()
-  }, [resetSilenceTimer, stopRecognition])
+
+    // Start silence timer
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+    silenceTimerRef.current = setTimeout(() => triggerFinal(), 5000)
+  }, [triggerFinal])
 
   const sendToApi = useCallback(async (transcript: string) => {
     setStatus('processing')
@@ -164,7 +200,12 @@ export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
       setError(err instanceof Error ? err.message : 'Er is iets fout gegaan')
       setStatus('error')
       conversationRef.current = []
-      setTimeout(() => { setStatus('idle'); setError(''); setQuestion(''); setTaskPreview(null) }, 4000)
+      setTimeout(() => {
+        setStatus('idle')
+        setError('')
+        setQuestion('')
+        setTaskPreview(null)
+      }, 4000)
     }
   }, [startRecognition, onTaskCreated])
 
@@ -178,13 +219,8 @@ export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
   }, [startRecognition, sendToApi])
 
   const handleStop = useCallback(() => {
-    stopRecognition()
-    if (transcriptRef.current.trim()) {
-      sendToApi(transcriptRef.current.trim())
-    } else {
-      setStatus('idle')
-    }
-  }, [stopRecognition, sendToApi])
+    triggerFinal()
+  }, [triggerFinal])
 
   const isRecording = status === 'recording'
   const isProcessing = status === 'processing'
@@ -214,8 +250,8 @@ export default function VoiceRecorder({ onTaskCreated }: VoiceRecorderProps) {
 
       <div className="text-sm text-zinc-500 text-center">
         {status === 'idle' && 'Druk om in te spreken'}
-        {status === 'recording' && !question && 'Aan het luisteren... (stopt na 5 sec stilte)'}
-        {status === 'recording' && question && 'Jouw antwoord...'}
+        {status === 'recording' && !question && 'Luisteren... (zeg "stop" of wacht 5 sec)'}
+        {status === 'recording' && question && 'Jouw antwoord... (zeg "stop" of wacht 5 sec)'}
         {status === 'processing' && 'Verwerken...'}
         {status === 'speaking' && 'App spreekt...'}
         {status === 'done' && 'Taak aangemaakt!'}

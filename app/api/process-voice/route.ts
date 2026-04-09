@@ -8,11 +8,6 @@ export type ConversationMessage = {
   content: string
 }
 
-export type ApiResponse =
-  | { type: 'question'; question: string; taskPreview: { title: string; notes: string | null } }
-  | { type: 'created'; task: Record<string, unknown> }
-  | { type: 'error'; error: string }
-
 export async function POST(request: Request) {
   try {
     const { transcript, conversation }: { transcript: string; conversation: ConversationMessage[] } =
@@ -22,33 +17,35 @@ export async function POST(request: Request) {
       return Response.json({ type: 'error', error: 'Geen tekst ontvangen' }, { status: 400 })
     }
 
-    const systemPrompt = `Je bent een slimme taakassistent die gesproken notities verwerkt.
+    const systemPrompt = `Je bent een slimme taakassistent die gesproken notities verwerkt. Je reageert altijd in het Nederlands, kort en vriendelijk.
 
-Je voert een gesprek met de gebruiker om een taak aan te maken. Je reageert altijd in het Nederlands.
+Je volgt altijd dit gesprekpad:
+1. Bepaal de taaknaam uit wat de gebruiker zegt
+2. Vraag of er nog inhoud/details toegevoegd moeten worden (bijv. "Wil je nog details toevoegen, of is dit genoeg?")
+3. Vraag of het een privé of zakelijke taak is (bijv. "Is dit een privé of zakelijke taak?")
+4. Maak de taak aan
 
-Regels:
-- Stel maximaal 1 vervolgvraag per beurt
-- Als je genoeg info hebt, maak de taak dan aan (na maximaal 2 vragen)
-- Als de gebruiker zegt "aanmaken", "doe maar", "ja", "prima", "oké" of iets vergelijkbaars → maak de taak direct aan
-- Als de gebruiker extra info geeft → verwerk die info en maak de taak aan
+Sla stappen over als de gebruiker ze al beantwoord heeft in eerdere berichten.
+Als de gebruiker "nee", "niks", "prima", "doe maar", "aanmaken" of iets vergelijkbaars zegt → ga door naar de volgende stap.
 
-Geef ALTIJD een JSON response in dit formaat:
+Geef ALTIJD een JSON response:
 
 Als je een vraag stelt:
 {
   "action": "question",
-  "question": "jouw vraag hier",
-  "taskPreview": { "title": "taaknaam", "notes": "eventuele notities of null" }
+  "question": "jouw vraag",
+  "taskPreview": { "title": "taaknaam", "notes": "notities of null" }
 }
 
 Als je de taak aanmaakt:
 {
   "action": "create",
   "title": "taaknaam (max 60 tekens)",
-  "notes": "alle relevante details als één tekst, of null als er niets extra is"
+  "notes": "alle relevante details als tekst, of null",
+  "category": "privé" of "zakelijk"
 }
 
-Reageer ALLEEN met geldige JSON.`
+Reageer ALLEEN met geldige JSON, geen uitleg.`
 
     const messages: Anthropic.MessageParam[] = [
       ...conversation.map((m) => ({
@@ -70,7 +67,15 @@ Reageer ALLEEN met geldige JSON.`
       return Response.json({ type: 'error', error: 'Onverwacht antwoord van Claude' }, { status: 500 })
     }
 
-    let parsed: { action: string; question?: string; taskPreview?: { title: string; notes: string | null }; title?: string; notes?: string | null }
+    let parsed: {
+      action: string
+      question?: string
+      taskPreview?: { title: string; notes: string | null }
+      title?: string
+      notes?: string | null
+      category?: string
+    }
+
     try {
       const clean = content.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
       parsed = JSON.parse(clean)
@@ -88,9 +93,11 @@ Reageer ALLEEN met geldige JSON.`
     }
 
     if (parsed.action === 'create') {
+      const category = parsed.category === 'zakelijk' ? 'zakelijk' : 'privé'
+
       const { data, error } = await supabase
         .from('tasks')
-        .insert({ title: parsed.title, notes: parsed.notes ?? null })
+        .insert({ title: parsed.title, notes: parsed.notes ?? null, category })
         .select()
         .single()
 
