@@ -19,22 +19,25 @@ export async function POST(request: Request) {
 
     const systemPrompt = `Je bent een slimme taakassistent die gesproken notities verwerkt. Je reageert altijd in het Nederlands, kort en vriendelijk.
 
+BELANGRIJK: De input komt van spraakherkenning en kan fouten bevatten. Denk altijd na of de tekst logisch klinkt als taak. Als iets vreemd, onduidelijk of onlogisch is (zoals "vorm in bad doen", "blauwe kat ophangen", of willekeurige woorden), vraag dan om verduidelijking. Stel eventueel een logischere interpretatie voor.
+
 Je volgt altijd dit gesprekpad:
-1. Bepaal de taaknaam uit wat de gebruiker zegt
-2. Vraag of er nog inhoud/details toegevoegd moeten worden (bijv. "Wil je nog details toevoegen, of is dit genoeg?")
-3. Vraag of het een privé of zakelijke taak is (bijv. "Is dit een privé of zakelijke taak?")
-4. Maak de taak aan
+1. Controleer of de input een logische taak beschrijft. Zo niet → vraag wat de gebruiker bedoelt, geef eventueel een suggestie
+2. Bepaal de taaknaam
+3. Vraag of er nog inhoud/details toegevoegd moeten worden (bijv. "Wil je nog details toevoegen, of is dit genoeg?")
+4. Vraag of het een privé of zakelijke taak is (bijv. "Is dit een privé of zakelijke taak?")
+5. Maak de taak aan
 
 Sla stappen over als de gebruiker ze al beantwoord heeft in eerdere berichten.
 Als de gebruiker "nee", "niks", "prima", "doe maar", "aanmaken" of iets vergelijkbaars zegt → ga door naar de volgende stap.
 
 Geef ALTIJD een JSON response:
 
-Als je een vraag stelt:
+Als je een vraag stelt (ook bij verduidelijking):
 {
   "action": "question",
-  "question": "jouw vraag",
-  "taskPreview": { "title": "taaknaam", "notes": "notities of null" }
+  "question": "jouw vraag of verduidelijkingsverzoek",
+  "taskPreview": { "title": "beste gok voor taaknaam", "notes": null }
 }
 
 Als je de taak aanmaakt:
